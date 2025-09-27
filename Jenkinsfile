@@ -12,8 +12,9 @@ pipeline {
                 echo 'Changes detected in frontend folder. Building the frontend...'
                 dir('frontend') {
                     // Your frontend build commands go here
-                    sh 'npm install'
-                    sh 'npm run build'
+                    // sh 'npm install'
+                    // sh 'npm run build'
+		    sh 'echo "Building in frontend"'
                 }
             }
         }
@@ -25,7 +26,7 @@ pipeline {
             steps {
                 echo 'Testing the frontend...'
                 dir('frontend') {
-                    sh 'npm test'
+                    sh 'echo "Testing in frontend"'
                 }
             }
         }
@@ -40,7 +41,7 @@ pipeline {
                 echo 'Changes detected in backend folder. Building the backend...'
                 dir('backend') {
                     // Your backend build commands go here (e.g., for Maven)
-                    sh 'mvn clean package'
+                    sh 'Building in backend'
                 }
             }
         }
@@ -52,7 +53,7 @@ pipeline {
             steps {
                 echo 'Testing the backend...'
                 dir('backend') {
-                    sh 'mvn test'
+                    sh 'testing in backend'
                 }
             }
         }

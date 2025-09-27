@@ -2,48 +2,59 @@ pipeline {
     agent any
 
     stages {
-        stage('Checkout') {
+        // --- FRONTEND PIPELINE STAGES ---
+        stage('Build Frontend') {
+            when {
+                // This condition checks if any changed files are inside the 'frontend/' folder
+                changeset "frontend/**"
+            }
             steps {
-                echo "Checking out the code..."
-                // Jenkins automatically checks out the repo if using pipeline from SCM
+                echo 'Changes detected in frontend folder. Building the frontend...'
+                dir('frontend') {
+                    // Your frontend build commands go here
+                    sh 'npm install'
+                    sh 'npm run build'
+                }
             }
         }
 
-        stage('Build') {
+        stage('Test Frontend') {
+            when {
+                changeset "frontend/**"
+            }
             steps {
-                echo "Building the project..."
-                // Put your build commands here
-                sh 'echo "Simulating build step"'
+                echo 'Testing the frontend...'
+                dir('frontend') {
+                    sh 'npm test'
+                }
             }
         }
 
-        stage('Test') {
+        // --- BACKEND PIPELINE STAGES ---
+        stage('Build Backend') {
+            when {
+                // This condition checks if any changed files are inside the 'backend/' folder
+                changeset "backend/**"
+            }
             steps {
-                echo "Running tests..."
-                // Put your test commands here
-                sh 'echo "Simulating test step"'
+                echo 'Changes detected in backend folder. Building the backend...'
+                dir('backend') {
+                    // Your backend build commands go here (e.g., for Maven)
+                    sh 'mvn clean package'
+                }
             }
         }
 
-        stage('Deploy') {
-            steps {
-                echo "Deploying the project..."
-                // Put your deploy commands here
-                sh 'echo "Simulating deploy step"'
+        stage('Test Backend') {
+            when {
+                changeset "backend/**"
             }
-        }
-    }
-
-    post {
-        always {
-            echo 'This will always run at the end of the pipeline.'
-        }
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed.'
+            steps {
+                echo 'Testing the backend...'
+                dir('backend') {
+                    sh 'mvn test'
+                }
+            }
         }
     }
 }
-

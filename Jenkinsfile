@@ -3,11 +3,7 @@ pipeline {
     agent any
 
     // Define the environment for the pipeline.
-    environment {
-        // PREPEND your machine's Node.js path to the default PATH.
-        // !!! REPLACE THE PATH BELOW WITH YOUR OWN !!!
-        PATH = "/home/appu/.nvm/versions/node/v23.3.0/bin/node"
-    }
+    tools {nodejs "node"}
 
     stages {
         // This stage will now run first to ensure a clean workspace.

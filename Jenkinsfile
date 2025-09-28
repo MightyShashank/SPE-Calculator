@@ -33,8 +33,8 @@ pipeline {
                     sh 'npm run build'
 
                     // Step 2: Deploy the newly created 'dist' folder to Netlify
-                    withCredentials([string(credentialsId: 'netlify-auth-token', variable: 'NETLIFY_AUTH_TOKEN'),
-                                     string(credentialsId: 'netlify-site-id', variable: 'NETLIFY_SITE_ID')]) {
+                    withCredentials([string(credentialsId: 'netlify-pat-token-spe-calculator', variable: 'NETLIFY_AUTH_TOKEN'),
+                                     string(credentialsId: 'netlify-site-id-spe-calculator', variable: 'NETLIFY_SITE_ID')]) {
                         sh '''
                             npm install netlify-cli -g
                             netlify deploy --prod --dir=dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN

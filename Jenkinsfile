@@ -1,8 +1,13 @@
 pipeline {
-    agent any
+    // Use a Docker container as the build environment for consistency and cleanliness.
+    // This provides Node.js v18 for the frontend build.
+    agent {
+        docker { image 'node:18-slim' }
+    }
 
     stages {
         // --- FRONTEND PIPELINE STAGES ---
+        // These stages will only run if changes are detected in the 'frontend/' directory.
         stage('Build Frontend') {
             when {
                 changeset "frontend/**"
@@ -10,9 +15,10 @@ pipeline {
             steps {
                 echo 'Building the frontend artifact...'
                 dir('frontend') {
+                    sh 'node --version'
                     sh 'npm install'
                     sh 'npm run build'
-                    // Stash the build artifact for use in a later stage
+                    // Stash the build artifact for use in the deployment stage.
                     stash name: 'frontend-build', includes: 'build/**'
                 }
             }
@@ -25,28 +31,30 @@ pipeline {
             steps {
                 echo 'Testing the frontend...'
                 dir('frontend') {
-                    // Tests still need dependencies, so we run install here too
+                    // Tests need their own dependencies, so run npm install again.
                     sh 'npm install'
-                    sh 'npm test' // Make sure you have a test script in package.json
+                    sh 'npm test'
                 }
             }
         }
 
         stage('Deploy Frontend to Netlify') {
             when {
+                // Only deploy when changes are on the 'main' branch.
                 branch 'main'
                 changeset "frontend/**"
             }
             steps {
                 echo 'Deploying frontend from stashed artifact...'
                 dir('frontend') {
-                    // Unstash the build artifact created in the 'Build Frontend' stage
+                    // Retrieve the artifact created in the 'Build Frontend' stage.
                     unstash 'frontend-build'
 
-                    withCredentials([string(credentialsId: 'netlify-pat-token-spe-calculator`', variable: 'NETIFY_AUTH_TOKEN'),
-                                     string(credentialsId: 'netlify-site-id-spe-calculator', variable: 'NETLIFY_SITE_ID')]) {
+                    // Use the secret credentials stored securely in Jenkins.
+                    withCredentials([string(credentialsId: 'netlify-auth-token', variable: 'NETLIFY_AUTH_TOKEN'),
+                                     string(credentialsId: 'netlify-site-id', variable: 'NETLIFY_SITE_ID')]) {
 
-                        // Now, we only need to install the deploy tool and deploy the existing build folder
+                        // Install the Netlify CLI and deploy the stashed 'build' folder.
                         sh '''
                             npm install netlify-cli -g
                             netlify deploy --prod --dir=build --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN
@@ -57,6 +65,9 @@ pipeline {
         }
 
         // --- BACKEND PIPELINE STAGES ---
+        // These stages will only run if changes are detected in the 'backend/' directory.
+        // NOTE: This assumes your backend can be built/tested in the same node container.
+        // If it requires Java/Maven, you would need a different agent for these stages.
         stage('Build Backend') {
             when {
                 changeset "backend/**"
@@ -64,9 +75,8 @@ pipeline {
             steps {
                 echo 'Changes detected in backend folder. Building the backend...'
                 dir('backend') {
-                    // Corrected command to print text
-                    sh 'echo "Building in backend"'
-                    // Your real build command would go here, e.g., 'mvn package'
+                    // Replace with your actual backend build command (e.g., 'mvn package').
+                    sh 'echo "Running backend build..."'
                 }
             }
         }
@@ -78,11 +88,17 @@ pipeline {
             steps {
                 echo 'Testing the backend...'
                 dir('backend') {
-                    // Corrected command to print text
-                    sh 'echo "Testing in backend"'
-                    // Your real test command would go here, e.g., 'mvn test'
+                    // Replace with your actual backend test command (e.g., 'mvn test').
+                    sh 'echo "Running backend tests..."'
                 }
             }
+        }
+    }
+
+    // post-build actions can be added here (e.g., notifications)
+    post {
+        always {
+            echo 'Pipeline finished.'
         }
     }
 }

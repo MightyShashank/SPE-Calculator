@@ -5,16 +5,15 @@ pipeline {
         // --- FRONTEND PIPELINE STAGES ---
         stage('Build Frontend') {
             when {
-                // This condition checks if any changed files are inside the 'frontend/' folder
                 changeset "frontend/**"
             }
             steps {
-                echo 'Changes detected in frontend folder. Building the frontend...'
+                echo 'Building the frontend artifact...'
                 dir('frontend') {
-                    // Your frontend build commands go here
-                    // sh 'npm install'
-                    // sh 'npm run build'
-		    sh 'echo "Building in frontend"'
+                    sh 'npm install'
+                    sh 'npm run build'
+                    // Stash the build artifact for use in a later stage
+                    stash name: 'frontend-build', includes: 'build/**'
                 }
             }
         }
@@ -26,7 +25,33 @@ pipeline {
             steps {
                 echo 'Testing the frontend...'
                 dir('frontend') {
-                    sh 'echo "Testing in frontend"'
+                    // Tests still need dependencies, so we run install here too
+                    sh 'npm install'
+                    sh 'npm test' // Make sure you have a test script in package.json
+                }
+            }
+        }
+
+        stage('Deploy Frontend to Netlify') {
+            when {
+                branch 'main'
+                changeset "frontend/**"
+            }
+            steps {
+                echo 'Deploying frontend from stashed artifact...'
+                dir('frontend') {
+                    // Unstash the build artifact created in the 'Build Frontend' stage
+                    unstash 'frontend-build'
+
+                    withCredentials([string(credentialsId: 'netlify-pat-token-spe-calculator`', variable: 'NETIFY_AUTH_TOKEN'),
+                                     string(credentialsId: 'netlify-site-id-spe-calculator', variable: 'NETLIFY_SITE_ID')]) {
+
+                        // Now, we only need to install the deploy tool and deploy the existing build folder
+                        sh '''
+                            npm install netlify-cli -g
+                            netlify deploy --prod --dir=build --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN
+                        '''
+                    }
                 }
             }
         }
@@ -34,14 +59,14 @@ pipeline {
         // --- BACKEND PIPELINE STAGES ---
         stage('Build Backend') {
             when {
-                // This condition checks if any changed files are inside the 'backend/' folder
                 changeset "backend/**"
             }
             steps {
                 echo 'Changes detected in backend folder. Building the backend...'
                 dir('backend') {
-                    // Your backend build commands go here (e.g., for Maven)
-                    sh 'Building in backend'
+                    // Corrected command to print text
+                    sh 'echo "Building in backend"'
+                    // Your real build command would go here, e.g., 'mvn package'
                 }
             }
         }
@@ -53,7 +78,9 @@ pipeline {
             steps {
                 echo 'Testing the backend...'
                 dir('backend') {
-                    sh 'testing in backend'
+                    // Corrected command to print text
+                    sh 'echo "Testing in backend"'
+                    // Your real test command would go here, e.g., 'mvn test'
                 }
             }
         }

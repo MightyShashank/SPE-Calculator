@@ -21,7 +21,7 @@ pipeline {
         // This new stage now handles both building and deploying the frontend.
         stage('Build and Deploy Frontend') {
             when {
-                branch 'main'
+                // branch 'main'
                 changeset "frontend/**"
             }
             steps {

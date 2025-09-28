@@ -1,16 +1,10 @@
 pipeline {
     // Use a Docker container as the build environment for consistency and cleanliness.
-    // This provides Node.js v18 for the frontend build.
     agent {
         docker {
             image 'node:20-slim'
             args '-u root' // Run the container as the root user
         }
-    }
-
-    options {
-        // Clean the workspace before every build to ensure no old files interfere.
-        cleanWs()
     }
 
     stages {
@@ -74,8 +68,6 @@ pipeline {
 
         // --- BACKEND PIPELINE STAGES ---
         // These stages will only run if changes are detected in the 'backend/' directory.
-        // NOTE: This assumes your backend can be built/tested in the same node container.
-        // If it requires Java/Maven, you would need a different agent for these stages.
         stage('Build Backend') {
             when {
                 changeset "backend/**"
@@ -83,7 +75,7 @@ pipeline {
             steps {
                 echo 'Changes detected in backend folder. Building the backend...'
                 dir('backend') {
-                    // Replace with your actual backend build command (e.g., 'mvn package').
+                    // Replace with your actual backend build command.
                     sh 'echo "Running backend build..."'
                 }
             }
@@ -96,17 +88,20 @@ pipeline {
             steps {
                 echo 'Testing the backend...'
                 dir('backend') {
-                    // Replace with your actual backend test command (e.g., 'mvn test').
+                    // Replace with your actual backend test command.
                     sh 'echo "Running backend tests..."'
                 }
             }
         }
     }
 
-    // post-build actions can be added here (e.g., notifications)
+    // This block runs after all stages are complete.
     post {
+        // 'always' ensures this runs whether the pipeline succeeds or fails.
         always {
-            echo 'Pipeline finished.'
+            echo 'Pipeline finished. Cleaning up the workspace for the next run...'
+            // This is the correct place for the workspace cleanup step.
+            cleanWs()
         }
     }
 }

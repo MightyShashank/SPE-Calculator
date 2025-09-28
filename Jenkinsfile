@@ -10,6 +10,15 @@ pipeline {
     stages {
         // --- FRONTEND PIPELINE STAGES ---
         // These stages will only run if changes are detected in the 'frontend/' directory.
+        stage('Preparation') {
+            steps {
+                echo 'Cleaning the workspace before build...'
+                // This step deletes the contents of the current directory
+                deleteDir()
+            }
+        }
+
+        // --- FRONTEND PIPELINE STAGES ---
         stage('Build Frontend') {
             when {
                 changeset "frontend/**"
@@ -17,10 +26,8 @@ pipeline {
             steps {
                 echo 'Building the frontend artifact...'
                 dir('frontend') {
-                    sh 'node --version'
                     sh 'npm install --cache .npm'
                     sh 'npm run build'
-                    // Stash the build artifact for use in the deployment stage.
                     stash name: 'frontend-build', includes: 'build/**'
                 }
             }

@@ -6,14 +6,6 @@ pipeline {
     tools {nodejs "node"}
 
     stages {
-        // This stage will now run first to ensure a clean workspace.
-        stage('Preparation') {
-            steps {
-                echo 'Cleaning workspace...'
-                // This deletes the contents of the workspace.
-                deleteDir()
-            }
-        }
 
         stage('Build Frontend') {
             when {

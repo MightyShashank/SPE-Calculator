@@ -1,7 +1,12 @@
 pipeline {
     // Use a Docker container as the build environment for consistency and cleanliness.
     // This provides Node.js v18 for the frontend build.
-    agent { docker { image 'node:20-slim' } }
+    agent {
+        docker {
+            image 'node:20-slim'
+            args '-u root' // Run the container as the root user
+        }
+    }
 
     stages {
         // --- FRONTEND PIPELINE STAGES ---
@@ -14,7 +19,7 @@ pipeline {
                 echo 'Building the frontend artifact...'
                 dir('frontend') {
                     sh 'node --version'
-                    sh 'npm install'
+                    sh 'npm install --cache .npm'
                     sh 'npm run build'
                     // Stash the build artifact for use in the deployment stage.
                     stash name: 'frontend-build', includes: 'build/**'
@@ -30,7 +35,7 @@ pipeline {
                 echo 'Testing the frontend...'
                 dir('frontend') {
                     // Tests need their own dependencies, so run npm install again.
-                    sh 'npm install'
+                    sh 'npm install --cache .npm'
                     sh 'npm test'
                 }
             }

@@ -1,9 +1,7 @@
 pipeline {
     // Use a Docker container as the build environment for consistency and cleanliness.
     // This provides Node.js v18 for the frontend build.
-    agent {
-        docker { image 'node:18-slim' }
-    }
+    agent { docker { image 'node:20-slim' } }
 
     stages {
         // --- FRONTEND PIPELINE STAGES ---

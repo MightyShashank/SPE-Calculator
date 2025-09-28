@@ -8,6 +8,11 @@ pipeline {
         }
     }
 
+    options {
+        // Clean the workspace before every build to ensure no old files interfere.
+        cleanWs()
+    }
+
     stages {
         // --- FRONTEND PIPELINE STAGES ---
         // These stages will only run if changes are detected in the 'frontend/' directory.

@@ -1,27 +1,9 @@
 pipeline {
-    // Run directly on the Jenkins agent (your machine).
     agent any
-
-    // Define the environment for the pipeline.
-    tools {nodejs "node"}
+    tools { nodejs "node" }
 
     stages {
-
-        stage('Build Frontend') {
-            when {
-                changeset "frontend/**"
-            }
-            steps {
-                echo 'Building the frontend artifact...'
-                dir('frontend') {
-                    sh 'node --version' // This will now show your machine's version
-                    sh 'npm install'   // The '--cache' flag is no longer needed
-                    sh 'npm run build'
-                    // This correctly points to the build folder inside the frontend directory
-                    // stash name: 'frontend-build', includes: 'frontend/build/**'
-                }
-            }
-        }
+        // THE SEPARATE 'Build Frontend' STAGE HAS BEEN REMOVED
 
         stage('Test Frontend') {
             when {
@@ -31,25 +13,31 @@ pipeline {
                 echo 'Testing the frontend...'
                 dir('frontend') {
                     sh 'npm install'
-                    // sh 'npm test'
+                    sh 'npm test'
                 }
             }
         }
 
-        stage('Deploy Frontend to Netlify') {
+        // This new stage now handles both building and deploying the frontend.
+        stage('Build and Deploy Frontend') {
             when {
                 branch 'main'
                 changeset "frontend/**"
             }
             steps {
-                echo 'Deploying frontend from stashed artifact...'
+                echo 'Building and Deploying frontend...'
                 dir('frontend') {
-                    unstash 'frontend-build'
+                    // Step 1: Install dependencies and build the project
+                    sh 'node --version'
+                    sh 'npm install'
+                    sh 'npm run build'
+
+                    // Step 2: Deploy the newly created 'dist' folder to Netlify
                     withCredentials([string(credentialsId: 'netlify-auth-token', variable: 'NETLIFY_AUTH_TOKEN'),
                                      string(credentialsId: 'netlify-site-id', variable: 'NETLIFY_SITE_ID')]) {
                         sh '''
                             npm install netlify-cli -g
-                            netlify deploy --prod --dir=build --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN
+                            netlify deploy --prod --dir=dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN
                         '''
                     }
                 }
@@ -83,8 +71,6 @@ pipeline {
     post {
         always {
             echo 'Pipeline finished.'
-            // We can leave this out since we clean at the start,
-            // but it's good practice for after.
             cleanWs()
         }
     }

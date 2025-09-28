@@ -18,7 +18,7 @@ pipeline {
                     sh 'npm install'   // The '--cache' flag is no longer needed
                     sh 'npm run build'
                     // This correctly points to the build folder inside the frontend directory
-                    stash name: 'frontend-build', includes: 'frontend/build/**'
+                    // stash name: 'frontend-build', includes: 'frontend/build/**'
                 }
             }
         }

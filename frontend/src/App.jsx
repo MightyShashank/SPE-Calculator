@@ -88,6 +88,7 @@ export default function App() {
                 break;
             case '←': // Backspace
                 setInput(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
+                setExpression(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
                 break;
             case '=': // Evaluate expression on the backend
                 if (expression) {

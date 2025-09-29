@@ -1,0 +1,17 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Pull Docker image
+      docker_image:
+        name: mightyshashank/spe-calculator
+        tag: latest
+        source: pull
+
+    - name: Run container
+      docker_container:
+        name: backend-app
+        image: mightyshashank/spe-calculator:latest
+        state: started
+        restart_policy: always
+        published_ports:
+          - "4000:4000"

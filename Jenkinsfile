@@ -2,6 +2,11 @@ pipeline {
     agent any
     tools { nodejs "node" }
 
+    environment {
+        DOCKER_IMAGE = "mightyshashank/spe-calculator"
+        DOCKER_TAG = "latest"
+    }
+
     stages {
         // THE SEPARATE 'Build Frontend' STAGE HAS BEEN REMOVED
 
@@ -52,6 +57,8 @@ pipeline {
             steps {
                 dir('backend') {
                     sh 'echo "Running backend build..."'
+                    // install deps (Node.js example)
+                    sh 'npm install'
                 }
             }
         }
@@ -63,6 +70,60 @@ pipeline {
             steps {
                 dir('backend') {
                     sh 'echo "Running backend tests..."'
+                    // run unit tests
+                    // sh 'npm test || true'  // replace with actual test framework
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            when {
+                changeset "backend/**"
+            }
+            steps {
+                script {
+                    dir('backend') {
+                        sh """
+                        echo "Building Docker image..."
+                        docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Image to Hub') {
+            when {
+                changeset "backend/**"
+            }
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_IMAGE:$DOCKER_TAG
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy with Ansible') {
+            when {
+                changeset "backend/**"
+            }
+            steps {
+                script {
+                    dir('ansible') {
+                        sh """
+                        echo "Running Ansible playbook..."
+                        ansible-playbook -i hosts deploy.yml
+                        """
+                    }
                 }
             }
         }

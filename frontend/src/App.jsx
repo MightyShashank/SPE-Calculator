@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 // Main App Component
 export default function App() {
@@ -9,67 +9,39 @@ export default function App() {
     const [memory, setMemory] = useState(0); // Memory store
     const [showSecondFunctions, setShowSecondFunctions] = useState(false); // Toggle for 2nd functions
     const [isLoading, setIsLoading] = useState(false); // Loading state for backend call
+    const [isResult, setIsResult] = useState(false); // Tracks if the current input is a result
 
-    // Load math.js library from CDN for backend simulation
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.min.js';
-        script.async = true;
-        document.head.appendChild(script);
-
-        return () => {
-            document.head.removeChild(script);
-        };
-    }, []);
-
-    // --- MOCK BACKEND FUNCTION ---
-    // In a real application, this function would make a fetch request to your server.
+    // --- BACKEND API FUNCTION ---
+    // This function makes a real fetch request to your backend server.
     const evaluateOnBackend = async (expr) => {
         setIsLoading(true);
         setInput('Calculating...');
 
-        // Simulate a network delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
         try {
-            // ** REPLACE THIS BLOCK WITH YOUR ACTUAL BACKEND API CALL **
-            // For example:
-            // const response = await fetch('https://your-backend.com/calculate', {
-            //   method: 'POST',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify({ expression: expr })
-            // });
-            // const data = await response.json();
-            // if (!response.ok) throw new Error(data.error || 'Calculation failed');
-            // return data.result;
+            // Make a POST request to the backend's /calculate endpoint
+            const response = await fetch('http://localhost:4000/calculate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              // Send the expression and the current angle mode (Rad/Deg)
+              body: JSON.stringify({ expression: expr, isRadians: isRadians })
+            });
             
-            // --- Start of Mock Backend Logic (using math.js for demonstration) ---
-            if (window.math) {
-                const mathWithConfig = window.math.create(window.math.all, {
-                    predictable: true,
-                    number: 'BigNumber'
-                });
-                let evalExpression = expr.replace(/√/g, 'sqrt').replace(/π/g, 'pi');
-                evalExpression = evalExpression.replace(/(\d+(\.\d+)?)%/g, '($1/100)');
-                evalExpression = evalExpression.replace(/(\d+)!/g, (match, num) => `factorial(${num})`);
+            const data = await response.json();
 
-                if (!isRadians) {
-                    evalExpression = evalExpression.replace(/(sin|cos|tan)\(([^)]+)\)/g, (match, func, angle) => `${func}(${angle} deg)`);
-                }
-                
-                const result = mathWithConfig.evaluate(evalExpression, {});
-                const formattedResult = mathWithConfig.format(result, { notation: 'fixed', precision: 10 });
-                const finalResult = String(parseFloat(formattedResult));
-                return finalResult;
-            } else {
-                throw new Error('math.js not loaded');
+            // If the server responded with an error status, throw an error.
+            if (!response.ok) {
+                throw new Error(data.error || 'Calculation failed');
             }
-            // --- End of Mock Backend Logic ---
+
+            // Return the result from the backend.
+            return data.result;
 
         } catch (error) {
             console.error("Backend Error:", error);
-            throw new Error('Invalid Expression'); // This error will be caught below
+            // This error will be caught by the calling function.
+            throw new Error('Invalid Expression');
         } finally {
+            // Ensure loading is set to false whether the call succeeds or fails.
             setIsLoading(false);
         }
     };
@@ -82,13 +54,17 @@ export default function App() {
             case 'AC': // All Clear
                 setInput('0');
                 setExpression('');
+                setIsResult(false);
                 break;
-            case 'C': // Clear current input
+            case 'C': // Clear current input. If input is already 0, clear the whole expression.
+                if (input === '0') {
+                    setExpression('');
+                }
                 setInput('0');
                 break;
             case '←': // Backspace
                 setInput(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
-                setExpression(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
+                setExpression(prev => prev.length > 1 ? prev.slice(0, -1) : '');
                 break;
             case '=': // Evaluate expression on the backend
                 if (expression) {
@@ -96,9 +72,11 @@ export default function App() {
                         const result = await evaluateOnBackend(expression);
                         setInput(result);
                         setExpression(result);
+                        setIsResult(true);
                     } catch (error) {
                         setInput('Error');
                         setExpression('');
+                        setIsResult(false);
                     }
                 }
                 break;
@@ -107,7 +85,8 @@ export default function App() {
                 setIsRadians(!isRadians);
                 break;
             case '+/-':
-                setInput(prev => (parseFloat(prev) * -1).toString());
+                setInput(prev => (prev.startsWith('-') ? prev.substring(1) : `-${prev}`));
+                setExpression(prev => (prev.startsWith('-') ? prev.substring(1) : `-${prev}`));
                 break;
             case 'M+':
                 setMemory(prev => prev + parseFloat(input));
@@ -125,49 +104,51 @@ export default function App() {
             case '2nd':
                 setShowSecondFunctions(!showSecondFunctions);
                 break;
+            // For complex functions, build the expression string.
+            // The user will press '=' when they are ready to evaluate.
             case 'x²':
                 setExpression(prev => `(${prev})^2`);
-                await handleButtonClick('=');
+                setInput(prev => `(${prev})^2`);
                 break;
             case 'x³':
                 setExpression(prev => `(${prev})^3`);
-                await handleButtonClick('=');
+                setInput(prev => `(${prev})^3`);
                 break;
              case 'xʸ':
                 setInput(prev => prev + '^');
                 setExpression(prev => prev + '^');
                 break;
             case 'eˣ':
-                setExpression(prev => `exp(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `exp(${prev})`);
+                setInput(prev => `exp(${prev})`);
                 break;
             case '10ˣ':
-                setExpression(prev => `10^(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `10^(${prev})`);
+                setInput(prev => `10^(${prev})`);
                 break;
             case '¹/x':
-                setExpression(prev => `1/(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `1/(${prev})`);
+                setInput(prev => `1/(${prev})`);
                 break;
             case '²√x':
-                setExpression(prev => `sqrt(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `sqrt(${prev})`);
+                setInput(prev => `sqrt(${prev})`);
                 break;
             case '³√x':
-                 setExpression(prev => `cbrt(${expression})`);
-                 await handleButtonClick('=');
+                 setExpression(prev => `cbrt(${prev})`);
+                 setInput(prev => `cbrt(${prev})`);
                  break;
             case 'ʸ√x':
                 setInput(prev => prev + ' nthRoot ');
                 setExpression(prev => prev + ' nthRoot ');
                 break;
             case 'ln':
-                setExpression(prev => `log(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `log(${prev})`);
+                setInput(prev => `log(${prev})`);
                 break;
             case 'log₁₀':
-                setExpression(prev => `log10(${expression})`);
-                await handleButtonClick('=');
+                setExpression(prev => `log10(${prev})`);
+                setInput(prev => `log10(${prev})`);
                 break;
             case 'sin':
             case 'cos':
@@ -176,50 +157,59 @@ export default function App() {
             case 'cosh':
             case 'tanh':
                  setExpression(prev => `${value}(${prev})`);
-                 await handleButtonClick('=');
+                 setInput(prev => `${value}(${prev})`);
                  break;
             case 'sin⁻¹':
                  setExpression(prev => `asin(${prev})`);
-                 await handleButtonClick('=');
+                 setInput(prev => `asin(${prev})`);
                  break;
             case 'cos⁻¹':
                 setExpression(prev => `acos(${prev})`);
-                await handleButtonClick('=');
+                setInput(prev => `acos(${prev})`);
                 break;
             case 'tan⁻¹':
                 setExpression(prev => `atan(${prev})`);
-                await handleButtonClick('=');
+                setInput(prev => `atan(${prev})`);
                 break;
             case 'e':
-                 setInput('2.71828');
-                 setExpression(prev => prev + '2.71828');
+                 setInput(prev => (prev === '0' || isResult) ? '2.71828' : prev + '2.71828');
+                 setExpression(prev => (prev === '0' || isResult) ? '2.71828' : prev + '2.71828');
+                 setIsResult(false);
                  break;
             case 'EE':
                  setInput(prev => prev + 'e');
                  setExpression(prev => prev + 'e');
                  break;
             case 'π':
-                setInput('3.14159');
-                setExpression(prev => prev + 'pi');
+                setInput(prev => (prev === '0' || isResult) ? '3.14159' : prev + '3.14159');
+                setExpression(prev => (prev === '0' || isResult) ? 'pi' : prev + 'pi');
+                setIsResult(false);
                 break;
             case 'rand':
-                 setInput(Math.random().toString());
-                 setExpression(Math.random().toString());
+                 const randomNum = Math.random().toString();
+                 setInput(randomNum);
+                 setExpression(randomNum);
                  break;
             case '!':
                 setExpression(prev => `${prev}!`);
-                await handleButtonClick('=');
+                setInput(prev => `${prev}!`);
                 break;
             default: // Handles numbers, operators, and parenthesis
-                if (input === '0' && value !== '.') {
+                const isOperator = ['+', '-', '*', '/', '%', '^'].includes(value);
+
+                if (isResult && !isOperator) { // A result is on screen, and user types a number
                     setInput(value);
                     setExpression(value);
-                } else if (input === 'Error') {
-                    setInput(value);
-                    setExpression(value);
-                } else {
-                    setInput(prev => prev + value);
-                    setExpression(prev => prev + value);
+                    setIsResult(false);
+                } else { // All other cases: appending operator to result, or normal typing
+                    if ((input === '0' && value !== '.') || input === 'Error') {
+                        setInput(value);
+                        setExpression(value);
+                    } else {
+                        setInput(prev => prev + value);
+                        setExpression(prev => prev + value);
+                    }
+                    setIsResult(false);
                 }
                 break;
         }
@@ -239,12 +229,12 @@ export default function App() {
     // Layout for calculator buttons
     const primaryButtons = [
         { val: showSecondFunctions ? 'x³' : 'x²', className: 'bg-gray-700 hover:bg-gray-600' },
-        { val: showSecondFunctions ? 'ʸ√x' : '²√x', className: 'bg-gray-700 hover:bg-gray-600' },
+        { val: showSecondFunctions ? '³√x' : '²√x', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: showSecondFunctions ? 'sin⁻¹' : 'sin', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: showSecondFunctions ? 'cos⁻¹' : 'cos', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: showSecondFunctions ? 'tan⁻¹' : 'tan', className: 'bg-gray-700 hover:bg-gray-600' },
 
-        { val: showSecondFunctions ? 'xʸ' : '¹/x', className: 'bg-gray-700 hover:bg-gray-600' },
+        { val: showSecondFunctions ? '¹/x' : 'xʸ', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: 'ln', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: '(', className: 'bg-gray-700 hover:bg-gray-600' },
         { val: ')', className: 'bg-gray-700 hover:bg-gray-600' },
@@ -310,20 +300,21 @@ export default function App() {
                     {primaryButtons.map((btn, index) => {
                          // Handling special rendering for x², x³, etc.
                         let displayVal = btn.val;
-                        if (btn.val.includes('²')) {
-                            displayVal = <span>x<sup>2</sup></span>;
-                        } else if (btn.val.includes('³')) {
-                            displayVal = <span>x<sup>3</sup></span>;
-                        } else if (btn.val.includes('ʸ')) {
-                            displayVal = <span>x<sup>y</sup></span>;
-                        } else if (btn.val.includes('¹/x')) {
-                            displayVal = <span><sup>1</sup>/<sub>x</sub></span>;
-                        } else if (btn.val.includes('²√x')) {
+                        // Use specific checks first to avoid conflicts (e.g., '²√x' vs 'x²')
+                        if (btn.val === '²√x') {
                             displayVal = <span><sup>2</sup>√x</span>;
-                        } else if (btn.val.includes('³√x')) {
+                        } else if (btn.val === '³√x') {
                             displayVal = <span><sup>3</sup>√x</span>;
-                        } else if (btn.val.includes('ʸ√x')) {
+                        } else if (btn.val === 'ʸ√x') {
                             displayVal = <span><sup>y</sup>√x</span>;
+                        } else if (btn.val === 'x²') {
+                            displayVal = <span>x<sup>2</sup></span>;
+                        } else if (btn.val === 'x³') {
+                            displayVal = <span>x<sup>3</sup></span>;
+                        } else if (btn.val === 'xʸ') {
+                            displayVal = <span>x<sup>y</sup></span>;
+                        } else if (btn.val === '¹/x') {
+                            displayVal = <span><sup>1</sup>/<sub>x</sub></span>;
                         } else if (btn.val.includes('⁻¹')) {
                             displayVal = <span>{btn.val.split('⁻¹')[0]}<sup>-1</sup></span>;
                         } else if (btn.val.includes('₁₀')) {
@@ -336,7 +327,7 @@ export default function App() {
                         return (
                              <Button key={index} value={btn.val} className={`${btn.className} ${btn.val === '0' ? 'col-span-2' : ''}`}>
                                 {displayVal}
-                            </Button>
+                             </Button>
                         )
                     })}
                 </div>

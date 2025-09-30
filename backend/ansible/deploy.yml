@@ -30,11 +30,12 @@
         tag: latest
         source: pull
 
-    - name: Run container
+    - name: Ensure backend container is running with latest image
       docker_container:
         name: backend-app
         image: mightyshashank/spe-calculator:latest
-        state: started
+        state: restarted       # ensures update if image changes
         restart_policy: always
         published_ports:
           - "4000:4000"
+        pull: yes               # pulls latest image before recreating container

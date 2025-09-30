@@ -118,10 +118,10 @@ pipeline {
             }
             steps {
                 script {
-                    dir('ansible') {
+                    dir('backend/ansible') {
                         sh """
                         echo "Running Ansible playbook..."
-                        ansible-playbook -i ./ansible/hosts ./ansible/deploy.yml
+                        ansible-playbook -i hosts deploy.yml
                         """
                     }
                 }

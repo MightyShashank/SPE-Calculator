@@ -34,7 +34,8 @@
       docker_container:
         name: backend-app
         image: mightyshashank/spe-calculator:latest
-        state: restarted       # ensures update if image changes
+        state: started
+        recreate: yes        # forces container recreation if image/config changed
         restart_policy: always
         published_ports:
           - "4000:4000"

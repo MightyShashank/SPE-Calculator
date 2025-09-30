@@ -1,5 +1,29 @@
+# - hosts: all
+#   tasks:
+#     - name: Pull Docker image
+#       docker_image:
+#         name: mightyshashank/spe-calculator
+#         tag: latest
+#         source: pull
+
+#     - name: Run container
+#       docker_container:
+#         name: backend-app
+#         image: mightyshashank/spe-calculator:latest
+#         state: started
+#         restart_policy: always
+#         published_ports:
+#           - "4000:4000"
+
 - hosts: all
+  gather_facts: false
   tasks:
+    - name: Ensure docker SDK for python is installed
+      pip:
+        name: docker
+        state: present
+        executable: pip3
+
     - name: Pull Docker image
       docker_image:
         name: mightyshashank/spe-calculator

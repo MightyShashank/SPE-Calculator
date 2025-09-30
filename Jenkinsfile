@@ -121,7 +121,7 @@ pipeline {
                     dir('ansible') {
                         sh """
                         echo "Running Ansible playbook..."
-                        ansible-playbook -i hosts deploy.yml
+                        ansible-playbook -i ./ansible/hosts ./ansible/deploy.yml
                         """
                     }
                 }

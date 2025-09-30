@@ -1,5 +1,4 @@
 - hosts: all
-  become: true
   tasks:
     - name: Pull Docker image
       docker_image:

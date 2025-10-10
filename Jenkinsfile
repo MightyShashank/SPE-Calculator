@@ -2,44 +2,69 @@
 // HELPER FUNCTION TO GET STAGE STATUSES
 // This must be defined outside the pipeline block.
 // ===================================================================
+import groovy.json.JsonSlurper
+import jenkins.model.Jenkins
+
+// ===================================================================
+// HELPER FUNCTION TO GET STAGE STATUSES (IMPROVED VERSION)
+// This must be defined outside the pipeline block.
+// ===================================================================
+@NonCPS // Best practice for functions using Jenkins APIs
 def getStageStatuses() {
-    def stages = [:]
-    // Using a try-catch block to handle cases where the build object might not be fully available
+    def stageResults = [:]
     try {
-        def build = currentBuild.rawBuild
-        def walker = new org.jenkinsci.plugins.workflow.graph.FlowGraphWalker(build.getExecution())
+        // Use the Blue Ocean API if available, as it's the most reliable
+        def apiUrl = "${Jenkins.instance.getRootUrl()}blue/rest/organizations/jenkins/pipelines/${env.JOB_NAME}/runs/${env.BUILD_NUMBER}/nodes/?limit=10000"
+        def nodes = new JsonSlurper().parse(new URL(apiUrl).newReader())
         
-        for (def node in walker) {
-            if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepAtomNode && node.getDescriptor().getId() == 'stage') {
-                def stageName = node.getArgument(0)
-                def status = 'SUCCESS'
-                def errorAction = node.getAction(org.jenkinsci.plugins.workflow.actions.ErrorAction.class)
-                if (errorAction != null) {
-                    status = 'FAILED'
-                } else if (node.getExecution().isCancelled()) {
-                    status = 'ABORTED'
-                }
-                stages[stageName] = status
+        for (def node in nodes) {
+            if (node.type == "STAGE") {
+                // Capitalize status for consistency (e.g., "SUCCESS", "FAILED")
+                stageResults[node.displayName] = node.result.toUpperCase()
             }
         }
         
-        def foundFailure = false
-        def finalStages = [:]
-        stages.each { stageName, status ->
-            if (foundFailure) {
-                finalStages[stageName] = 'SKIPPED'
-            } else {
-                finalStages[stageName] = status
+        // If Blue Ocean fails, fall back to the graph walker method
+        if (stageResults.isEmpty()) {
+            throw new Exception("Blue Ocean API returned no stages, trying fallback.")
+        }
+
+    } catch (Exception e) {
+        println "Could not use Blue Ocean API, using fallback method. Error: ${e.message}"
+        // Fallback logic from before, slightly improved
+        def build = currentBuild.rawBuild
+        def walker = new org.jenkinsci.plugins.workflow.graph.FlowGraphWalker(build.getExecution())
+        def stagesInOrder = []
+        for (def node in walker) {
+            if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && "Stage" == node.getStepName()) {
+                def stageName = node.getDisplayName()
+                def status = (node.getError() != null) ? 'FAILED' : 'SUCCESS'
+                stagesInOrder.add([name: stageName, status: status])
             }
-            if (status == 'FAILED') {
+        }
+        // Determine SKIPPED stages based on the first failure
+        def foundFailure = false
+        for (def stage in stagesInOrder) {
+            if (foundFailure) {
+                stageResults[stage.name] = 'SKIPPED'
+            } else {
+                stageResults[stage.name] = stage.status
+            }
+            if (stage.status == 'FAILED') {
                 foundFailure = true
             }
         }
-        return finalStages
-    } catch (e) {
-        // Return a default message if status parsing fails
-        return ["Error": "Could not retrieve stage status"]
     }
+    
+    // Ensure that if the build failed but no stage is marked FAILED, we mark the last one.
+    if (currentBuild.result == 'FAILURE' && !stageResults.containsValue('FAILED')) {
+        if (!stageResults.isEmpty()) {
+            def lastStageName = stageResults.keySet()[-1]
+            stageResults[lastStageName] = 'FAILED'
+        }
+    }
+
+    return stageResults
 }
 
 // ===================================================================

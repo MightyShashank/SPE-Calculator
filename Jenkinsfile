@@ -267,112 +267,92 @@ pipeline {
             }
         }
         failure {
-    script {
-        // ✅ Track failed stage (fallback = Unknown)
-        def failedStage = "Unknown"
-
-        // Jenkins stores the stage status info under current build run
-        try {
-            // Use the Blue Ocean API to get full stage data (if allowed)
-            def stages = currentBuild.rawBuild.getAction(org.jenkinsci.plugins.workflow.job.views.FlowGraphAction)
-            if (stages) {
-                def failed = stages.getStages().find { it.status.toString() == 'FAILED' }
-                if (failed) {
-                    failedStage = failed.displayName
+            script {
+                // This logic runs only on failed builds
+                def statusColors = [
+                    'SUCCESS': '#28a745',
+                    'FAILED': '#dc3545',
+                    'SKIPPED': '#6c757d'
+                ]
+                def buildStatus = 'FAILURE' // We know it's a failure here
+                def buildColor = statusColors['FAILED']
+                
+                def stageStatuses = getStageStatuses()
+                def stageRows = ''
+                stageStatuses.each { stageName, status ->
+                    def color = statusColors[status] ?: '#6c757d'
+                    stageRows += """
+                        <tr>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd;">${stageName}</td>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd; text-align: center;">
+                                <span style="background-color: ${color}; color: white; padding: 5px 15px; border-radius: 15px; font-size: 12px; font-weight: bold;">${status}</span>
+                            </td>
+                        </tr>
+                    """
                 }
-            }
-        } catch (ignored) {
-            // If Blue Ocean API is blocked or not approved, fallback to manual search
-            def stageStatuses = getStageStatuses()
-            def failedEntry = stageStatuses.find { name, status -> status == 'FAILED' }
-            if (failedEntry) {
-                failedStage = failedEntry.key
-            }
-        }
 
-        // Colors for UI tags
-        def statusColors = [
-            'SUCCESS': '#28a745',
-            'FAILED' : '#dc3545',
-            'SKIPPED': '#6c757d'
-        ]
+                stageStatuses.each { stageName, status ->   
+                    echo "Stage name: ${stageName}, stage status: ${status}"
+                }
 
-        def buildStatus = 'FAILURE'
-        def buildColor = statusColors['FAILED']
+                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+                def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+                
+                def emailBody = """
+                <!DOCTYPE html>
+                <html>
+                <head></head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333;">
+                    <div style="max-width: 600px; margin: 20px auto; background-color: #f9f9f9; border: 1px solid #dddddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="background-color: ${buildColor}; color: white; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                            <h1 style="margin:0; font-size: 24px;">Build ${buildStatus}</h1>
+                            <p style="margin:5px 0 0;">${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+                        </div>
+                        <div style="padding: 25px;">
+                            <p>A build has failed. Here are the details:</p>
+                            
+                            <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; margin-top: 20px; border-radius: 5px;">
+                                <strong>Error:</strong>
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px; font-family: monospace;">
+                                    The pipeline failed. Please check the Jenkins console log for details.
+                                </pre>
+                            </div>
 
-        def stageStatuses = getStageStatuses()
-        def stageRows = ''
-        stageStatuses.each { stageName, status ->
-            def color = statusColors[status] ?: '#6c757d'
-            stageRows += """
-                <tr>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd;">${stageName}</td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd; text-align: center;">
-                        <span style="background-color: ${color}; color: white; padding: 5px 15px; border-radius: 15px; font-size: 12px; font-weight: bold;">${status}</span>
-                    </td>
-                </tr>
-            """
-        }
-
-        def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
-        def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
-
-        def emailBody = """
-        <!DOCTYPE html>
-        <html>
-        <head></head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333;">
-            <div style="max-width: 600px; margin: 20px auto; background-color: #f9f9f9; border: 1px solid #dddddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="background-color: ${buildColor}; color: white; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px;">
-                    <h1 style="margin:0; font-size: 24px;">Build ${buildStatus}</h1>
-                    <p style="margin:5px 0 0;">${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
-                </div>
-                <div style="padding: 25px;">
-                    <p>A build has failed. Here are the details:</p>
-
-                    <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; margin-top: 20px; border-radius: 5px;">
-                        <strong>❌ Failed Stage:</strong> ${failedStage}<br>
-                        <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px; font-family: monospace;">
-The pipeline failed in the "${failedStage}" stage.
-Check the Jenkins console log for detailed error output.
-                        </pre>
+                            
+                            <h3 style="margin-top: 25px; margin-bottom: 15px;">Stage Overview</h3>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                <thead>
+                                    <tr>
+                                        <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dddddd; width: 70%;">Stage Name</th>
+                                        <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: center; border-bottom: 2px solid #dddddd;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${stageRows}
+                                </tbody>
+                            </table>
+                            
+                            <p style="text-align: center; margin-top: 30px;">
+                                <a href="${publicBuildUrl}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">View Build in Jenkins</a>
+                            </p>
+                        </div>
+                        <div style="text-align: center; padding: 20px; font-size: 12px; color: #888;">
+                            This is an automated notification from Jenkins.
+                        </div>
                     </div>
+                </body>
+                </html>
+                """
 
-                    <h3 style="margin-top: 25px; margin-bottom: 15px;">Stage Overview</h3>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                        <thead>
-                            <tr>
-                                <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dddddd; width: 70%;">Stage Name</th>
-                                <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: center; border-bottom: 2px solid #dddddd;">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${stageRows}
-                        </tbody>
-                    </table>
-
-                    <p style="text-align: center; margin-top: 30px;">
-                        <a href="${publicBuildUrl}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">View Build in Jenkins</a>
-                    </p>
-                </div>
-                <div style="text-align: center; padding: 20px; font-size: 12px; color: #888;">
-                    This is an automated notification from Jenkins.
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-
-        emailext(
-            subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-            body: emailBody,
-            to: 'shashank@codecollab.co.in',
-            mimeType: 'text/html',
-            attachLog: true
-        )
-    }
-}
-
+                emailext (
+                    subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+                    body: emailBody,
+                    to: 'shashank@codecollab.co.in',
+                    mimeType: 'text/html',
+                    attachLog: true
+                )
+            }
+        }
         always {
             // This block is now only for cleanup
             echo 'Pipeline finished. Cleaning up workspace.'

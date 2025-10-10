@@ -131,25 +131,43 @@ pipeline {
 
     post {
 
-        success {
-            emailext (
-                subject: "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-                body: """<p>The build was successful!</p>
-                         <p>Check the build output here: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>""",
-                to: 'shashank@codecollab.co.in',
-                mimeType: 'text/html'
-            )
+         success {
+            script {
+                // Define your public ngrok URL prefix
+                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+
+                // Replace the localhost part of the build URL
+                def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+
+                emailext (
+                    subject: "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+                    body: """<p>The build was successful!</p>
+                            <p>Check the build output here: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
+                    to: 'shashank@codecollab.co.in',
+                    mimeType: 'text/html'
+                )
+            }
         }
         // This block runs if the pipeline fails at any stage
         failure {
-            emailext (
-                subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-                body: """<p>The build has FAILED.</p>
-                         <p>Please check the build logs for more details: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>""",
-                to: 'shashank@codecollab.co.in',
-                mimeType: 'text/html',
-                attachLog: true // Attaches the build log to the email
-            )
+
+            script {
+                // Define your public ngrok URL prefix
+                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+
+                // Replace the localhost part of the build URL
+                def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+
+                emailext (
+                    subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+                    body: """<p>The build has FAILED.</p>
+                            <p>Please check the build logs for more details: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
+                    to: 'shashank@codecollab.co.in',
+                    mimeType: 'text/html',
+                    attachLog: true // Attaches the build log to the email
+                )
+            }
+            
         }
 
         always {

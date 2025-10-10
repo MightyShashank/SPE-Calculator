@@ -9,61 +9,82 @@ import jenkins.model.Jenkins
 // HELPER FUNCTION TO GET STAGE STATUSES (IMPROVED VERSION)
 // This must be defined outside the pipeline block.
 // ===================================================================
+// ===================================================================
+// HELPER FUNCTION TO GET STAGE STATUSES (FINAL CORRECTED VERSION)
+// This must be defined outside the pipeline block.
+// ===================================================================
 @NonCPS // Best practice for functions using Jenkins APIs
 def getStageStatuses() {
     def stageResults = [:]
     try {
-        // Use the Blue Ocean API if available, as it's the most reliable
+        // Primary Method: Use the Blue Ocean API if available, as it's the most reliable
         def apiUrl = "${Jenkins.instance.getRootUrl()}blue/rest/organizations/jenkins/pipelines/${env.JOB_NAME}/runs/${env.BUILD_NUMBER}/nodes/?limit=10000"
-        def nodes = new JsonSlurper().parse(new URL(apiUrl).newReader())
+        def nodes = new groovy.json.JsonSlurper().parse(new URL(apiUrl).newReader())
         
+        def stagesInOrder = []
         for (def node in nodes) {
             if (node.type == "STAGE") {
-                // Capitalize status for consistency (e.g., "SUCCESS", "FAILED")
-                stageResults[node.displayName] = node.result.toUpperCase()
+                // The API gives us everything we need directly
+                stagesInOrder.add([name: node.displayName, status: node.result.toUpperCase()])
             }
         }
+
+        // The Blue Ocean API sometimes lists stages in reverse order, so we reverse it to be sure.
+        for (def stage in stagesInOrder.reverse()) {
+            stageResults[stage.name] = stage.status
+        }
         
-        // If Blue Ocean fails, fall back to the graph walker method
         if (stageResults.isEmpty()) {
             throw new Exception("Blue Ocean API returned no stages, trying fallback.")
         }
 
     } catch (Exception e) {
         println "Could not use Blue Ocean API, using fallback method. Error: ${e.message}"
-        // Fallback logic from before, slightly improved
+        // Fallback Method: Manually walk the pipeline graph to find stages and the failure
         def build = currentBuild.rawBuild
         def walker = new org.jenkinsci.plugins.workflow.graph.FlowGraphWalker(build.getExecution())
-        def stagesInOrder = []
+        def allStageNodes = []
+        def failingStageName = null
+
+        // First, find the node that actually contains the error
         for (def node in walker) {
-            if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && "Stage" == node.getStepName()) {
-                def stageName = node.getDisplayName()
-                def status = (node.getError() != null) ? 'FAILED' : 'SUCCESS'
-                stagesInOrder.add([name: stageName, status: status])
+            def errorAction = node.getAction(org.jenkinsci.plugins.workflow.actions.ErrorAction.class)
+            if (errorAction != null) {
+                // Now find the stage that this error node belongs to
+                def enclosingStage = node.getEnclosingBlocks().find { it instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && it.getStepName() == 'Stage' }
+                if (enclosingStage != null) {
+                    failingStageName = enclosingStage.getDisplayName()
+                    break // We found our failing stage, no need to look further
+                }
             }
         }
-        // Determine SKIPPED stages based on the first failure
-        def foundFailure = false
-        for (def stage in stagesInOrder) {
-            if (foundFailure) {
-                stageResults[stage.name] = 'SKIPPED'
-            } else {
-                stageResults[stage.name] = stage.status
+        
+        // Next, get a list of all stages that were started, in order
+        for (def node in walker) {
+            if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && node.getStepName() == 'Stage') {
+                allStageNodes.add(node.getDisplayName())
             }
-            if (stage.status == 'FAILED') {
+        }
+        
+        // Finally, build the results map
+        def foundFailure = false
+        for (def stageName in allStageNodes) {
+            if (stageName == failingStageName) {
+                stageResults[stageName] = 'FAILED'
                 foundFailure = true
+            } else if (foundFailure) {
+                stageResults[stageName] = 'SKIPPED'
+            } else {
+                stageResults[stageName] = 'SUCCESS'
             }
         }
     }
     
-    // Ensure that if the build failed but no stage is marked FAILED, we mark the last one.
-    if (currentBuild.result == 'FAILURE' && !stageResults.containsValue('FAILED')) {
-        if (!stageResults.isEmpty()) {
-            def lastStageName = stageResults.keySet()[-1]
-            stageResults[lastStageName] = 'FAILED'
-        }
-    }
-
+    // Final check to remove internal Jenkins stages from the report
+    stageResults.remove("Declarative: Tool Install")
+    stageResults.remove("Declarative: Checkout SCM")
+    stageResults.remove("Declarative: Post Actions")
+    
     return stageResults
 }
 

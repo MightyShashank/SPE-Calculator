@@ -259,7 +259,7 @@ pipeline {
             }
             
             // Perform cleanup and other final actions
-            echo 'Pipeline finished.'
+            echo 'Pipeline finished and done.'
             cleanWs()
         }
     }

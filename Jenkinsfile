@@ -13,62 +13,56 @@ import jenkins.model.Jenkins
 // HELPER FUNCTION TO GET STAGE STATUSES (FINAL CORRECTED VERSION)
 // This must be defined outside the pipeline block.
 // ===================================================================
-@NonCPS // Best practice for functions using Jenkins APIs
+// ===================================================================
+// HELPER FUNCTION TO GET STAGE STATUSES (FINAL CORRECTED VERSION)
+// ===================================================================
+@NonCPS
 def getStageStatuses() {
     def stageResults = [:]
     try {
-        // Primary Method: Use the Blue Ocean API if available, as it's the most reliable
+        // Primary Method: Use the Blue Ocean API if available
         def apiUrl = "${Jenkins.instance.getRootUrl()}blue/rest/organizations/jenkins/pipelines/${env.JOB_NAME}/runs/${env.BUILD_NUMBER}/nodes/?limit=10000"
         def nodes = new groovy.json.JsonSlurper().parse(new URL(apiUrl).newReader())
-        
         def stagesInOrder = []
         for (def node in nodes) {
             if (node.type == "STAGE") {
-                // The API gives us everything we need directly
                 stagesInOrder.add([name: node.displayName, status: node.result.toUpperCase()])
             }
         }
-
-        // The Blue Ocean API sometimes lists stages in reverse order, so we reverse it to be sure.
         for (def stage in stagesInOrder.reverse()) {
             stageResults[stage.name] = stage.status
         }
-        
-        if (stageResults.isEmpty()) {
-            throw new Exception("Blue Ocean API returned no stages, trying fallback.")
-        }
+        if (stageResults.isEmpty()) { throw new Exception("Blue Ocean API returned no stages.") }
 
     } catch (Exception e) {
         println "Could not use Blue Ocean API, using fallback method. Error: ${e.message}"
         // Fallback Method: Manually walk the pipeline graph to find stages and the failure
         def build = currentBuild.rawBuild
         def walker = new org.jenkinsci.plugins.workflow.graph.FlowGraphWalker(build.getExecution())
-        def allStageNodes = []
-        def failingStageName = null
-
-        // First, find the node that actually contains the error
-        for (def node in walker) {
-            def errorAction = node.getAction(org.jenkinsci.plugins.workflow.actions.ErrorAction.class)
-            if (errorAction != null) {
-                // Now find the stage that this error node belongs to
-                def enclosingStage = node.getEnclosingBlocks().find { it instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && it.getStepName() == 'Stage' }
-                if (enclosingStage != null) {
-                    failingStageName = enclosingStage.getDisplayName()
-                    break // We found our failing stage, no need to look further
-                }
-            }
-        }
+        List<org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode> allStageNodes = []
+        def errorNode = null
         
-        // Next, get a list of all stages that were started, in order
+        // Find all stages that were started, and find the node with the error
         for (def node in walker) {
             if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode && node.getStepName() == 'Stage') {
-                allStageNodes.add(node.getDisplayName())
+                allStageNodes.add(node)
+            }
+            if (node.getError() != null) {
+                errorNode = node
             }
         }
+
+        // Determine which stage the error belongs to
+        def failingStageNode = null
+        if (errorNode != null) {
+            failingStageNode = errorNode.getEnclosingBlocks().find { it in allStageNodes }
+        }
         
-        // Finally, build the results map
+        // Build the final results map based on the failing stage
+        def failingStageName = failingStageNode?.getDisplayName()
         def foundFailure = false
-        for (def stageName in allStageNodes) {
+        for (def stageNode in allStageNodes) {
+            def stageName = stageNode.getDisplayName()
             if (stageName == failingStageName) {
                 stageResults[stageName] = 'FAILED'
                 foundFailure = true

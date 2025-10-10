@@ -131,15 +131,11 @@ pipeline {
                 changeset "backend/**"
             }
             steps {
-                script {
-                    try {
-                        dir('backend') {
-                            sh 'exit 1' // force failure
-                        }
-                    } catch (err) {
-                        buildError = err
-                        throw err  // rethrow so Jenkins still marks it as failure
-                    }
+                dir('backend') {
+                    echo 'Forcing this stage to fail for demonstration...'
+                    // The 'exit 1' command tells the shell to exit with a failure status code.
+                    // Jenkins will interpret this as a build failure.
+                    sh 'exit 1'
                 }
             }
         }
@@ -313,8 +309,11 @@ pipeline {
                             
                             <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; margin-top: 20px; border-radius: 5px;">
                                 <strong>Error:</strong>
-                                <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px; font-family: monospace;">${error.message}</pre>
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px; font-family: monospace;">
+                                    The pipeline failed. Please check the Jenkins console log for details.
+                                </pre>
                             </div>
+
                             
                             <h3 style="margin-top: 25px; margin-bottom: 15px;">Stage Overview</h3>
                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">

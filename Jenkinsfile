@@ -130,44 +130,147 @@ pipeline {
     }
 
     post {
-
-        success {
+        always {
             script {
-                // Define your public ngrok URL prefix
+                // ===================================================================
+                // HELPER FUNCTION TO GET STAGE STATUSES
+                // ===================================================================
+                def getStageStatuses() {
+                    def stages = [:]
+                    def build = currentBuild.rawBuild
+                    def walker = new org.jenkinsci.plugins.workflow.graph.FlowGraphWalker(build.getExecution())
+                    
+                    for (def node in walker) {
+                        if (node instanceof org.jenkinsci.plugins.workflow.cps.nodes.StepAtomNode && node.getDescriptor().getId() == 'stage') {
+                            def stageName = node.getArgument(0)
+                            def status = 'SUCCESS'
+                            def errorAction = node.getAction(org.jenkinsci.plugins.workflow.actions.ErrorAction.class)
+                            if (errorAction != null) {
+                                status = 'FAILED'
+                            } else if (node.getExecution().isCancelled()) {
+                                status = 'ABORTED'
+                            }
+                            // This simplistic check doesn't differentiate SKIPPED well, but works for linear pipelines.
+                            // A FAILED stage implies subsequent stages are SKIPPED.
+                            stages[stageName] = status
+                        }
+                    }
+                    
+                    // Determine SKIPPED stages
+                    def foundFailure = false
+                    def finalStages = [:]
+                    stages.each { stageName, status ->
+                        if (foundFailure) {
+                            finalStages[stageName] = 'SKIPPED'
+                        } else {
+                            finalStages[stageName] = status
+                        }
+                        if (status == 'FAILED') {
+                            foundFailure = true
+                        }
+                    }
+                    return finalStages
+                }
+
+                // ===================================================================
+                // HTML & CSS STYLING FOR THE EMAIL
+                // ===================================================================
+                def statusColors = [
+                    'SUCCESS': '#28a745',
+                    'FAILED': '#dc3545',
+                    'SKIPPED': '#6c757d'
+                ]
+                def buildStatus = currentBuild.result ?: 'SUCCESS'
+                def buildColor = statusColors[buildStatus] ?: '#007bff'
+                
+                def stageStatuses = getStageStatuses()
+                def stageRows = ''
+                stageStatuses.each { stageName, status ->
+                    def color = statusColors[status] ?: '#6c757d'
+                    stageRows += """
+                        <tr>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd;">${stageName}</td>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd; text-align: center;">
+                                <span style="background-color: ${color}; color: white; padding: 5px 15px; border-radius: 15px; font-size: 12px; font-weight: bold;">${status}</span>
+                            </td>
+                        </tr>
+                    """
+                }
+
+                // ===================================================================
+                // EMAIL BODY TEMPLATE
+                // ===================================================================
                 def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
-
-                // Replace the localhost part of the build URL
                 def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+                
+                def emailBody = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; }
+                        .container { max-width: 600px; margin: 20px auto; background-color: #f9f9f9; border: 1px solid #dddddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .header { background-color: ${buildColor}; color: white; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+                        .content { padding: 25px; }
+                        .stage-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        .stage-table th { background-color: #f2f2f2; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dddddd; }
+                        .error-box { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; margin-top: 20px; border-radius: 5px; }
+                        .footer { text-align: center; padding: 20px; font-size: 12px; color: #888; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Build ${buildStatus}</h1>
+                            <p style="margin:0;">${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+                        </div>
+                        <div class="content">
+                            <p>A new build has completed. Here are the details:</p>
+                            
+                            ${buildStatus == 'FAILURE' ? """
+                            <div class="error-box">
+                                <strong>Error:</strong>
+                                <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px;">${error.message}</pre>
+                            </div>
+                            """ : ''}
+                            
+                            <h3>Stage Overview</h3>
+                            <table class="stage-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70%;">Stage Name</th>
+                                        <th style="text-align: center;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${stageRows}
+                                </tbody>
+                            </table>
+                            
+                            <p style="text-align: center; margin-top: 30px;">
+                                <a href="${publicBuildUrl}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">View Build in Jenkins</a>
+                            </p>
+                        </div>
+                        <div class="footer">
+                            This is an automated notification from Jenkins.
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
 
+                // Set subject based on build status
+                def emailSubject = (buildStatus == 'SUCCESS') ? "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]" : "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]"
+
+                // Send the email
                 emailext (
-                    subject: "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-                    body: """<p>The build was successful!</p>
-                            <p>Check the build output here: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
-                    to: 'shashank@codecollab.co.in',
-                    mimeType: 'text/html'
-                )
-            }
-        }
-        // This block runs if the pipeline fails at any stage
-        failure {
-
-            script {
-                // Define your public ngrok URL prefix
-                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
-
-                // Replace the localhost part of the build URL
-                def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
-
-                emailext (
-                    subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-                    body: """<p>The build has FAILED.</p>
-                            <p>Please check the build logs for more details: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
+                    subject: emailSubject,
+                    body: emailBody,
                     to: 'shashank@codecollab.co.in',
                     mimeType: 'text/html',
-                    attachLog: true // Attaches the build log to the email
+                    attachLog: (buildStatus == 'FAILURE')
                 )
             }
-            
         }
 
         always {
@@ -175,4 +278,53 @@ pipeline {
             cleanWs()
         }
     }
+
+    // post {
+
+    //     success {
+    //         script {
+    //             // Define your public ngrok URL prefix
+    //             def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+
+    //             // Replace the localhost part of the build URL
+    //             def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+
+    //             emailext (
+    //                 subject: "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+    //                 body: """<p>The build was successful!</p>
+    //                         <p>Check the build output here: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
+    //                 to: 'shashank@codecollab.co.in',
+    //                 mimeType: 'text/html'
+    //             )
+    //         }
+    //     }
+    //     // This block runs if the pipeline fails at any stage
+    //     failure {
+
+    //         script {
+    //             // Define your public ngrok URL prefix
+    //             def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+
+    //             // Replace the localhost part of the build URL
+    //             def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+
+    //             emailext (
+    //                 subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+    //                 body: """<p>The build has FAILED.</p>
+    //                         <p>Please check the build logs for more details: <a href="${publicBuildUrl}">${publicBuildUrl}</a></p>""",
+    //                 to: 'shashank@codecollab.co.in',
+    //                 mimeType: 'text/html',
+    //                 attachLog: true // Attaches the build log to the email
+    //             )
+    //         }
+            
+    //     }
+
+        // always {
+        //     echo 'Pipeline finished.'
+        //     cleanWs()
+        // }
+
+        
+    // }
 }

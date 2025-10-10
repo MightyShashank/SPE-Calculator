@@ -1,6 +1,5 @@
-# =============================================
+
 # Build Stage: Installs dependencies
-# =============================================
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -10,9 +9,7 @@ COPY package*.json ./
 # Use 'npm ci' for faster, more reliable builds from package-lock.json
 RUN npm ci --only=production
 
-# =============================================
 # Final Stage: Creates the lean production image
-# =============================================
 FROM node:18-alpine
 
 WORKDIR /app

@@ -194,18 +194,16 @@ pipeline {
     }
 
     post {
-        always {
+        success {
             script {
-                // ===================================================================
-                // HTML & CSS STYLING FOR THE EMAIL
-                // ===================================================================
+                // This logic runs only on successful builds
                 def statusColors = [
                     'SUCCESS': '#28a745',
                     'FAILED': '#dc3545',
                     'SKIPPED': '#6c757d'
                 ]
-                def buildStatus = currentBuild.result ?: 'SUCCESS'
-                def buildColor = statusColors[buildStatus] ?: '#007bff'
+                def buildStatus = 'SUCCESS'
+                def buildColor = statusColors[buildStatus]
                 
                 def stageStatuses = getStageStatuses()
                 def stageRows = ''
@@ -221,17 +219,13 @@ pipeline {
                     """
                 }
 
-                // ===================================================================
-                // EMAIL BODY TEMPLATE
-                // ===================================================================
                 def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
                 def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
                 
                 def emailBody = """
                 <!DOCTYPE html>
                 <html>
-                <head>
-                </head>
+                <head></head>
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333;">
                     <div style="max-width: 600px; margin: 20px auto; background-color: #f9f9f9; border: 1px solid #dddddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                         <div style="background-color: ${buildColor}; color: white; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px;">
@@ -239,14 +233,84 @@ pipeline {
                             <p style="margin:5px 0 0;">${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
                         </div>
                         <div style="padding: 25px;">
-                            <p>A new build has completed. Here are the details:</p>
+                            <p>A new build has completed successfully. Here are the details:</p>
+                            <h3 style="margin-top: 25px; margin-bottom: 15px;">Stage Overview</h3>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                <thead>
+                                    <tr>
+                                        <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dddddd; width: 70%;">Stage Name</th>
+                                        <th style="background-color: #f2f2f2; padding: 12px 15px; text-align: center; border-bottom: 2px solid #dddddd;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${stageRows}
+                                </tbody>
+                            </table>
+                            <p style="text-align: center; margin-top: 30px;">
+                                <a href="${publicBuildUrl}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">View Build in Jenkins</a>
+                            </p>
+                        </div>
+                        <div style="text-align: center; padding: 20px; font-size: 12px; color: #888;">
+                            This is an automated notification from Jenkins.
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+
+                emailext (
+                    subject: "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
+                    body: emailBody,
+                    to: 'shashank@codecollab.co.in',
+                    mimeType: 'text/html'
+                )
+            }
+        }
+        failure {
+            script {
+                // This logic runs only on failed builds
+                def statusColors = [
+                    'SUCCESS': '#28a745',
+                    'FAILED': '#dc3545',
+                    'SKIPPED': '#6c757d'
+                ]
+                def buildStatus = 'FAILURE' // We know it's a failure here
+                def buildColor = statusColors['FAILED']
+                
+                def stageStatuses = getStageStatuses()
+                def stageRows = ''
+                stageStatuses.each { stageName, status ->
+                    def color = statusColors[status] ?: '#6c757d'
+                    stageRows += """
+                        <tr>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd;">${stageName}</td>
+                            <td style="padding: 12px 15px; border-bottom: 1px solid #dddddd; text-align: center;">
+                                <span style="background-color: ${color}; color: white; padding: 5px 15px; border-radius: 15px; font-size: 12px; font-weight: bold;">${status}</span>
+                            </td>
+                        </tr>
+                    """
+                }
+
+                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+                def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
+                
+                def emailBody = """
+                <!DOCTYPE html>
+                <html>
+                <head></head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333;">
+                    <div style="max-width: 600px; margin: 20px auto; background-color: #f9f9f9; border: 1px solid #dddddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="background-color: ${buildColor}; color: white; padding: 20px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                            <h1 style="margin:0; font-size: 24px;">Build ${buildStatus}</h1>
+                            <p style="margin:5px 0 0;">${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+                        </div>
+                        <div style="padding: 25px;">
+                            <p>A build has failed. Here are the details:</p>
                             
-                            ${buildStatus == 'FAILURE' ? """
                             <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; margin-top: 20px; border-radius: 5px;">
                                 <strong>Error:</strong>
                                 <pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 5px; font-family: monospace;">${error.message}</pre>
                             </div>
-                            """ : ''}
                             
                             <h3 style="margin-top: 25px; margin-bottom: 15px;">Stage Overview</h3>
                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -273,21 +337,18 @@ pipeline {
                 </html>
                 """
 
-                // Set subject based on build status
-                def emailSubject = (buildStatus == 'SUCCESS') ? "✅ SUCCESS: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]" : "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]"
-
-                // Send the email
                 emailext (
-                    subject: emailSubject,
+                    subject: "❌ FAILED: Pipeline '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
                     body: emailBody,
                     to: 'shashank@codecollab.co.in',
                     mimeType: 'text/html',
-                    attachLog: (buildStatus == 'FAILURE')
+                    attachLog: true
                 )
             }
-            
-            // Perform cleanup and other final actions
-            echo 'Pipeline finished and done 12345.'
+        }
+        always {
+            // This block is now only for cleanup
+            echo 'Pipeline finished. Cleaning up workspace.'
             cleanWs()
         }
     }

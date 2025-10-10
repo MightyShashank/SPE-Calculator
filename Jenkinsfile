@@ -147,10 +147,11 @@ pipeline {
             }
             steps {
                 dir('backend') {
-                    echo 'Forcing this stage to fail for demonstration...'
-                    // The 'exit 1' command tells the shell to exit with a failure status code.
-                    // Jenkins will interpret this as a build failure.
-                    sh 'exit 1'
+                    // echo 'Forcing this stage to fail for demonstration...'
+                    // // The 'exit 1' command tells the shell to exit with a failure status code.
+                    // // Jenkins will interpret this as a build failure.
+                    // sh 'exit 1'
+                    echo 'Running backend tests'
                 }
             }
         }

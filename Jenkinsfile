@@ -311,7 +311,7 @@ pipeline {
                     echo "Stage name: ${stageName}, stage status: ${status}"
                 }
 
-                def ngrokUrl = 'https://96178a24bd01.ngrok-free.app'
+                def ngrokUrl = 'https://a5883c9b74c7.ngrok-free.app'
                 def publicBuildUrl = env.BUILD_URL.replace('http://localhost:8080', ngrokUrl)
                 
                 def emailBody = """
